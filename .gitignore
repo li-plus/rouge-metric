@@ -1,0 +1,25 @@
+# python
+__pycache__/
+*.pyc
+/*.egg-info
+
+# macOS
+.DS_Store
+
+# unit test
+.coverage
+coverage.xml
+.pytest_cache/
+
+# packaging
+/dist/
+/build/
+
+# ide
+.vscode/
+.idea/
+
+# custom
+.rouge_metric/
+/docs/_build/
+WordNet-2.0.exc.db

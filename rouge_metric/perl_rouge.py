@@ -118,35 +118,41 @@ class PerlRouge(object):
         self.clean_up = clean_up
 
     @staticmethod
-    def _write_summaries(summaries, references, peer_dir, model_dir):
+    def _write_summaries(summaries, references, hyp_dir, ref_dir):
         # type: (List[str], List[List[str]], str, str) -> None
-        makedirs(peer_dir, exist_ok=True)
-        makedirs(model_dir, exist_ok=True)
+        makedirs(hyp_dir, exist_ok=True)
+        makedirs(ref_dir, exist_ok=True)
 
         for i, hyp in enumerate(summaries):
-            peer_path = os.path.join(peer_dir, '{}.txt'.format(i))
-            with open(peer_path, 'w') as f:
+            hyp_path = os.path.join(hyp_dir, '{}.txt'.format(i))
+            with open(hyp_path, 'w') as f:
                 f.write(hyp)
 
         for i, multi_ref in enumerate(references):
             for j, ref in enumerate(multi_ref):
-                model_path = os.path.join(model_dir, '{}.{}.txt'.format(i, j))
-                with open(model_path, 'w') as f:
+                ref_path = os.path.join(ref_dir, '{}.{}.txt'.format(i, j))
+                with open(ref_path, 'w') as f:
                     f.write(ref)
 
     @staticmethod
-    def _write_config(config_path, peer_dir, model_dir):
+    def _write_config(config_path, hyp_dir, ref_dir):
         # type: (str, str, str) -> None
         xml = '<ROUGE-EVAL version="1.5.5">'
-        for n, peer in enumerate(glob(os.path.join(peer_dir, '*'))):
-            basename, _ = os.path.splitext(os.path.basename(peer))
+        for n, hyp in enumerate(glob(os.path.join(hyp_dir, '*'))):
+            if not os.path.isfile(hyp):
+                continue
+            hyp_name = os.path.basename(hyp)
+            hyp_stem, _ = os.path.splitext(hyp_name)
 
-            peers = '<P ID="{}">{}</P>'.format('A', os.path.basename(peer))
+            hyp_str = '<P ID="{}">{}</P>'.format('A', hyp_name)
 
-            model_paths = glob(os.path.join(model_dir, '{}.*'.format(basename)))
-            models = '\n'.join(
-                '<M ID="{}">{}</M>'.format(idx, os.path.basename(path))
-                for idx, path in enumerate(model_paths))
+            ref_paths = glob(os.path.join(ref_dir, '{}.*'.format(hyp_stem)))
+            ref_paths = [ref for ref in ref_paths if os.path.isfile(ref)]
+            if not ref_paths:
+                raise RuntimeError('Reference not found for {}'.format(hyp))
+            ref_str = '\n'.join(
+                '<M ID="{}">{}</M>'.format(idx, os.path.basename(ref))
+                for idx, ref in enumerate(ref_paths))
 
             xml += """
 <EVAL ID="{eval_id}">
@@ -160,8 +166,8 @@ class PerlRouge(object):
     <MODELS>
         {models}
     </MODELS>
-</EVAL>""".format(eval_id=n + 1, model_root=model_dir, peer_root=peer_dir,
-                  peers=peers, models=models)
+</EVAL>""".format(eval_id=n + 1, model_root=ref_dir, peer_root=hyp_dir,
+                  peers=hyp_str, models=ref_str)
         xml += '</ROUGE-EVAL>'
 
         with open(config_path, 'w') as f:
@@ -212,10 +218,10 @@ class PerlRouge(object):
             raise ValueError('Hypotheses and references must be the same size')
         makedirs(self.temp_root, exist_ok=True)
         temp_dir = mkdtemp(dir=self.temp_root)
-        peer_dir = os.path.join(temp_dir, 'hyp')
-        model_dir = os.path.join(temp_dir, 'ref')
-        self._write_summaries(hypotheses, multi_references, peer_dir, model_dir)
-        result = self.evaluate_from_files(peer_dir, model_dir)
+        hyp_dir = os.path.join(temp_dir, 'hyp')
+        ref_dir = os.path.join(temp_dir, 'ref')
+        self._write_summaries(hypotheses, multi_references, hyp_dir, ref_dir)
+        result = self.evaluate_from_files(hyp_dir, ref_dir)
         if self.clean_up:
             shutil.rmtree(temp_dir)
         return result
